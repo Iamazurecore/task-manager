@@ -149,3 +149,8 @@ class TaskStorage {
     }
   }
 }
+
+/* Lets the automated tests load this file in Node. Browsers skip this block. */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { TaskStorage };
+}
