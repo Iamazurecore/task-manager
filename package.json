@@ -1,0 +1,20 @@
+{
+  "name": "taskline",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Taskline task manager, enhanced by CN7021 Group 11.f. The app itself still runs by opening index.html; these packages are only for testing.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^5.1.0",
+    "jsdom": "^31.0.0",
+    "vitest": "^5.1.0"
+  }
+}

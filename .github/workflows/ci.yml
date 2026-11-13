@@ -1,0 +1,31 @@
+name: CI
+
+# Runs on every push and every pull request, so a broken change
+# shows a red cross on GitHub before anyone merges it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install test tools
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run coverage
+
+      - name: Check dependencies for known vulnerabilities
+        run: npm audit --audit-level=high
