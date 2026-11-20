@@ -3,6 +3,15 @@
    TaskStorage class for reuse and easy error handling.
    ======================================================== */
 
+// FIX #3 (A1): a dedicated error type, so the app can tell a failed save
+// apart from any other problem and warn the user instead of pretending it worked.
+class StorageError extends Error {
+  constructor(message = 'Your change could not be saved. Browser storage may be full or blocked, so it will be lost if you refresh the page.') {
+    super(message);
+    this.name = 'StorageError';
+  }
+}
+
 class TaskStorage {
   /**
    * @param {string} storageKey - localStorage key for tasks
@@ -47,6 +56,19 @@ class TaskStorage {
   }
 
   /**
+   * FIX #3 (A1): saves the list and throws a StorageError if the save failed.
+   * Before this fix, callers ignored saveTasks()'s false result.
+   * @param {Array<Object>} tasks
+   * @returns {Array<Object>} the same list, only once it is really saved
+   */
+  _persist(tasks) {
+    if (!this.saveTasks(tasks)) {
+      throw new StorageError();
+    }
+    return tasks;
+  }
+
+  /**
    * Adds a new task object to storage.
    * @param {Array<Object>} tasks - current task list
    * @param {Object} task - new task to add
@@ -54,8 +76,8 @@ class TaskStorage {
    */
   addTask(tasks, task) {
     const updated = [task, ...tasks];
-    this.saveTasks(updated);
-    return updated;
+    // FIX #3 (A1): was `this.saveTasks(updated); return updated;`, which ignored a failed save.
+    return this._persist(updated);
   }
 
   /**
@@ -69,8 +91,8 @@ class TaskStorage {
     const updated = tasks.map((task) =>
       task.id === id ? { ...task, ...updates } : task
     );
-    this.saveTasks(updated);
-    return updated;
+    // FIX #3 (A1): was `this.saveTasks(updated); return updated;`, which ignored a failed save.
+    return this._persist(updated);
   }
 
   /**
@@ -81,8 +103,8 @@ class TaskStorage {
    */
   deleteTask(tasks, id) {
     const updated = tasks.filter((task) => task.id !== id);
-    this.saveTasks(updated);
-    return updated;
+    // FIX #3 (A1): was `this.saveTasks(updated); return updated;`, which ignored a failed save.
+    return this._persist(updated);
   }
 
   /**
@@ -92,8 +114,8 @@ class TaskStorage {
    */
   clearCompletedTasks(tasks) {
     const updated = tasks.filter((task) => !task.completed);
-    this.saveTasks(updated);
-    return updated;
+    // FIX #3 (A1): was `this.saveTasks(updated); return updated;`, which ignored a failed save.
+    return this._persist(updated);
   }
 
   /**
@@ -116,8 +138,8 @@ class TaskStorage {
       }
     });
 
-    this.saveTasks(reordered);
-    return reordered;
+    // FIX #3 (A1): was `this.saveTasks(reordered); return reordered;`, which ignored a failed save.
+    return this._persist(reordered);
   }
 
   /**
@@ -152,5 +174,5 @@ class TaskStorage {
 
 /* Lets the automated tests load this file in Node. Browsers skip this block. */
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { TaskStorage };
+  module.exports = { TaskStorage, StorageError };
 }

@@ -230,7 +230,8 @@ class TaskApp {
       createdDate: nowISO(),
     };
 
-    this.tasks = this.storage.addTask(this.tasks, newTask);
+    // FIX #3 (A1): stop here if the save failed, keeping what the user typed.
+    if (!this._trySave(() => this.storage.addTask(this.tasks, newTask))) return;
     this._resetForm();
     this._render();
 
@@ -241,6 +242,23 @@ class TaskApp {
 
     this.ui.showToast('Task added.');
     document.getElementById('taskTitle').focus();
+  }
+
+  /**
+   * FIX #3 (A1): runs a storage change and only accepts the new task list if it
+   * was really saved. If saving fails, the list stays as it was and the user
+   * sees a warning instead of a success message.
+   * @param {Function} change - a call to a TaskStorage method that returns the new list
+   * @returns {boolean} true if the change was saved
+   */
+  _trySave(change) {
+    try {
+      this.tasks = change();
+      return true;
+    } catch (error) {
+      this.ui.showToast(error.message, 6000);
+      return false;
+    }
   }
 
   /** Populates the form with the selected task's data for editing. */
@@ -270,12 +288,16 @@ class TaskApp {
   _saveEdit(data) {
     const taskId = this.editingTaskId;
 
-    this.tasks = this.storage.updateTask(this.tasks, taskId, {
-      title: data.title,
-      description: data.description,
-      priority: data.priority,
-      dueDate: data.dueDate,
-    });
+    // FIX #3 (A1): stop here if the save failed, keeping the form open with the edits.
+    const saved = this._trySave(() =>
+      this.storage.updateTask(this.tasks, taskId, {
+        title: data.title,
+        description: data.description,
+        priority: data.priority,
+        dueDate: data.dueDate,
+      })
+    );
+    if (!saved) return;
 
     this.editingTaskId = null;
     this._resetForm();
@@ -298,9 +320,14 @@ class TaskApp {
     const task = this.tasks.find((t) => t.id === taskId);
     if (!task) return;
 
-    this.tasks = this.storage.updateTask(this.tasks, taskId, {
-      completed: !task.completed,
-    });
+    // FIX #3 (A1): stop here if the save failed, so the tick does not change.
+    const saved = this._trySave(() =>
+      this.storage.updateTask(this.tasks, taskId, { completed: !task.completed })
+    );
+    if (!saved) {
+      this._render();
+      return;
+    }
 
     this._render();
     this.ui.showToast(task.completed ? 'Marked as active.' : 'Marked as complete.');
@@ -313,7 +340,11 @@ class TaskApp {
   async _deleteTask(taskId) {
     // Play animation first, then remove from data
     await this.ui.animateTaskExit(taskId);
-    this.tasks = this.storage.deleteTask(this.tasks, taskId);
+    // FIX #3 (A1): if the save failed, redraw the list so the task comes back.
+    if (!this._trySave(() => this.storage.deleteTask(this.tasks, taskId))) {
+      this._render();
+      return;
+    }
 
     // If we were editing this task, cancel the edit
     if (this.editingTaskId === taskId) {
@@ -338,7 +369,8 @@ class TaskApp {
       return;
     }
 
-    this.tasks = this.storage.clearCompletedTasks(this.tasks);
+    // FIX #3 (A1): stop here if the save failed, keeping the completed tasks.
+    if (!this._trySave(() => this.storage.clearCompletedTasks(this.tasks))) return;
     this._render();
     this.ui.showToast(`Cleared ${completedCount} completed task${completedCount !== 1 ? 's' : ''}.`);
   }
@@ -473,9 +505,14 @@ class TaskApp {
         .filter((id) => !visibleSet.has(id));
       const orderedIds = [...visibleIds, ...hiddenIds];
 
-      this.tasks = this.storage.reorderTasks(this.tasks, orderedIds);
+      // FIX #3 (A1): if the save failed, redraw the list in its old order.
+      const saved = this._trySave(() => this.storage.reorderTasks(this.tasks, orderedIds));
 
       overItem.classList.remove('is-drag-over');
+      if (!saved) {
+        this._render();
+        return;
+      }
       this._render();
       this.ui.showToast('Task order saved.');
     });
