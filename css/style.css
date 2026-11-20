@@ -11,6 +11,14 @@
   box-sizing: border-box;
 }
 
+/* FIX #5: the browser hides [hidden] elements with a weak built-in rule, and
+   any class that sets `display` (e.g. .empty-state, .btn) overrode it, so
+   "Nothing here yet" and "Cancel edit" never disappeared. This makes the
+   hidden attribute always win. */
+[hidden] {
+  display: none !important;
+}
+
 html, body {
   margin: 0;
   padding: 0;
