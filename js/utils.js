@@ -36,6 +36,20 @@ function escapeHTML(str) {
 }
 
 /**
+ * FIX #7 (A4): reads a date-only string ("2026-11-21") as that calendar day
+ * in the user's own time zone. `new Date("2026-11-21")` reads it as midnight
+ * UTC instead, which is still the previous day anywhere behind UTC.
+ * Full timestamps (with a time part) are passed to Date unchanged.
+ * @param {string} value
+ * @returns {Date}
+ */
+function parseLocalDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return new Date(value);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+/**
  * Formats an ISO date string (YYYY-MM-DD or full ISO) into
  * a short human-readable date, e.g. "12 Jun 2026".
  * @param {string} isoString
@@ -43,7 +57,8 @@ function escapeHTML(str) {
  */
 function formatDate(isoString) {
   if (!isoString) return '';
-  const date = new Date(isoString);
+  // FIX #7 (A4): was `new Date(isoString)`, which shifted the day behind UTC.
+  const date = parseLocalDate(isoString);
   if (isNaN(date.getTime())) return '';
   return date.toLocaleDateString(undefined, {
     day: '2-digit',
@@ -78,7 +93,8 @@ function isOverdue(dueDate) {
   if (!dueDate) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate);
+  // FIX #7 (A4): was `new Date(dueDate)`, so "today" counted as overdue behind UTC.
+  const due = parseLocalDate(dueDate);
   due.setHours(0, 0, 0, 0);
   return due.getTime() < today.getTime();
 }
@@ -125,6 +141,7 @@ if (typeof module !== 'undefined' && module.exports) {
     generateId,
     nowISO,
     escapeHTML,
+    parseLocalDate,
     formatDate,
     formatCreatedDate,
     isOverdue,
