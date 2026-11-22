@@ -785,6 +785,21 @@ ul {
   transform: translateX(-50%) translateY(0);
 }
 
+/* FEAT #9 (C5): a toast with an Undo button must be clickable. */
+.toast.is-visible.has-action {
+  pointer-events: auto;
+}
+
+.toast__action {
+  margin-left: 12px;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  color: inherit;
+  font-weight: 700;
+  padding: 2px 10px;
+}
+
 /* ---------------------------------------------------------
    Footer
    --------------------------------------------------------- */

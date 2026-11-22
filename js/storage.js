@@ -17,9 +17,11 @@ class TaskStorage {
    * @param {string} storageKey - localStorage key for tasks
    * @param {string} themeKey - localStorage key for theme preference
    */
-  constructor(storageKey = 'taskline_tasks', themeKey = 'taskline_theme') {
+  constructor(storageKey = 'taskline_tasks', themeKey = 'taskline_theme', trashKey = 'taskline_trash') {
     this.storageKey = storageKey;
     this.themeKey = themeKey;
+    // FEAT #9 (C5): deleted tasks are moved here (soft delete) so they can be restored.
+    this.trashKey = trashKey;
   }
 
   /**
@@ -96,26 +98,129 @@ class TaskStorage {
   }
 
   /**
-   * Removes a task by ID.
+   * Moves a task to the trash (soft delete) so it can be restored.
    * @param {Array<Object>} tasks - current task list
    * @param {string} id - task ID to remove
    * @returns {Array<Object>} updated task list
    */
   deleteTask(tasks, id) {
-    const updated = tasks.filter((task) => task.id !== id);
-    // FIX #3 (A1): was `this.saveTasks(updated); return updated;`, which ignored a failed save.
-    return this._persist(updated);
+    // FEAT #9 (C5): was a hard delete (filter + save). The task now goes to the trash first.
+    return this._moveToTrash(tasks, (task) => task.id === id);
   }
 
   /**
-   * Removes all tasks marked as completed.
+   * Moves all completed tasks to the trash so the clear can be undone.
    * @param {Array<Object>} tasks - current task list
    * @returns {Array<Object>} updated task list
    */
   clearCompletedTasks(tasks) {
-    const updated = tasks.filter((task) => !task.completed);
-    // FIX #3 (A1): was `this.saveTasks(updated); return updated;`, which ignored a failed save.
-    return this._persist(updated);
+    // FEAT #9 (C5): completed tasks go to the trash, so "Clear completed" can be undone.
+    return this._moveToTrash(tasks, (task) => task.completed);
+  }
+
+  /* ---------------- FEAT #9 (C5): soft delete and undo ---------------- */
+
+  /**
+   * Reads the trash: a list of { task, index, deletedAt } entries.
+   * @returns {Array<Object>}
+   */
+  loadTrash() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(this.trashKey) || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error('TaskStorage.loadTrash: failed to read the trash', error);
+      return [];
+    }
+  }
+
+  /**
+   * Saves the trash, throwing a StorageError on failure (same rule as A1).
+   * @param {Array<Object>} trash
+   */
+  _saveTrash(trash) {
+    try {
+      localStorage.setItem(this.trashKey, JSON.stringify(trash));
+    } catch (error) {
+      console.error('TaskStorage._saveTrash: failed to write the trash', error);
+      throw new StorageError();
+    }
+  }
+
+  /**
+   * Moves every task that matches into the trash, remembering where it was.
+   * The trash is written first; if saving the task list then fails, the trash
+   * is put back as it was, so nothing is half-deleted.
+   * @param {Array<Object>} tasks
+   * @param {Function} matches - (task) => boolean
+   * @returns {Array<Object>} the remaining tasks, once really saved
+   */
+  _moveToTrash(tasks, matches) {
+    const deletedAt = new Date().toISOString();
+    const removed = [];
+    const remaining = [];
+    tasks.forEach((task, index) => {
+      if (matches(task)) removed.push({ task, index, deletedAt });
+      else remaining.push(task);
+    });
+    if (removed.length === 0) return tasks;
+
+    const oldTrash = this.loadTrash();
+    this._saveTrash([...oldTrash, ...removed]);
+    try {
+      return this._persist(remaining);
+    } catch (error) {
+      this._saveTrash(oldTrash);
+      throw error;
+    }
+  }
+
+  /**
+   * Takes the given tasks out of the trash and puts each back where it was.
+   * @param {Array<Object>} tasks - current task list
+   * @param {Array<string>} ids - IDs of the tasks to restore
+   * @returns {Array<Object>} the task list with the tasks restored, once saved
+   */
+  restoreTasks(tasks, ids) {
+    const trash = this.loadTrash();
+    const wanted = new Set(ids);
+    const present = new Set(tasks.map((task) => task.id));
+    const back = trash
+      // Never restore a task that is already in the list (no duplicates).
+      .filter((entry) => wanted.has(entry.task.id) && !present.has(entry.task.id))
+      .sort((x, y) => x.index - y.index);
+    if (back.length === 0) return tasks;
+
+    const restored = [...tasks];
+    back.forEach((entry) => {
+      restored.splice(Math.min(entry.index, restored.length), 0, entry.task);
+    });
+
+    this._persist(restored);
+    // The tasks are safely back; if the trash cannot be tidied, they would only
+    // remain in it as well, which does no harm, so this failure is not fatal.
+    try {
+      this._saveTrash(trash.filter((entry) => !wanted.has(entry.task.id)));
+    } catch (error) {
+      console.warn('TaskStorage.restoreTasks: restored, but the trash was not updated', error);
+    }
+    return restored;
+  }
+
+  /**
+   * Permanently removes trash entries older than the given number of days.
+   * @param {number} maxAgeDays
+   */
+  purgeTrash(maxAgeDays = 30) {
+    const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+    const trash = this.loadTrash();
+    const kept = trash.filter((entry) => new Date(entry.deletedAt).getTime() >= cutoff);
+    if (kept.length === trash.length) return;
+    try {
+      this._saveTrash(kept);
+    } catch (error) {
+      console.warn('TaskStorage.purgeTrash: could not tidy the trash', error);
+    }
   }
 
   /**
