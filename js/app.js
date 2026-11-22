@@ -16,6 +16,8 @@ class TaskApp {
     this.activeFilter = 'all';
     this.searchTerm = '';
     this.editingTaskId = null;
+    // FEAT #9 (C5): IDs removed by the last delete or clear, so Undo can bring them back.
+    this.lastDeletedIds = [];
 
     /* ---- Drag & Drop state ---- */
     this.dragSrcId = null;
@@ -34,6 +36,8 @@ class TaskApp {
   /** Loads persisted tasks from localStorage. */
   _loadData() {
     this.tasks = this.storage.loadTasks();
+    // FEAT #9 (C5): permanently forget tasks deleted more than 30 days ago.
+    this.storage.purgeTrash(30);
   }
 
   /** Reads the saved theme and applies it. */
@@ -136,6 +140,16 @@ class TaskApp {
       e.preventDefault();
       this._cancelEdit();
       return;
+    }
+
+    // FEAT #9 (C5): Ctrl+Z undoes the last delete, unless the user is typing.
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && this.lastDeletedIds.length > 0) {
+      const tag = document.activeElement && document.activeElement.tagName;
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+        e.preventDefault();
+        this._undoDelete();
+        return;
+      }
     }
 
     // Ctrl+F: focus search
@@ -353,7 +367,19 @@ class TaskApp {
     }
 
     this._render();
-    this.ui.showToast('Task deleted.');
+    // FEAT #9 (C5): offer Undo instead of deleting for good.
+    this.lastDeletedIds = [taskId];
+    this.ui.showToast('Task deleted.', 6000, { label: 'Undo', onClick: () => this._undoDelete() });
+  }
+
+  /** FEAT #9 (C5): restores the tasks removed by the last delete or clear. */
+  _undoDelete() {
+    const ids = this.lastDeletedIds;
+    if (ids.length === 0) return;
+    if (!this._trySave(() => this.storage.restoreTasks(this.tasks, ids))) return;
+    this.lastDeletedIds = [];
+    this._render();
+    this.ui.showToast(`Restored ${ids.length} task${ids.length !== 1 ? 's' : ''}.`);
   }
 
   /** Removes all completed tasks after confirming. */
@@ -365,14 +391,19 @@ class TaskApp {
       return;
     }
 
-    if (!window.confirm(`Remove ${completedCount} completed task${completedCount !== 1 ? 's' : ''}?`)) {
-      return;
-    }
+    // FEAT #9 (C5): the confirm() dialog was removed: clearing can now be undone,
+    // which interrupts the user less than asking first.
+    const completedIds = this.tasks.filter((t) => t.completed).map((t) => t.id);
 
     // FIX #3 (A1): stop here if the save failed, keeping the completed tasks.
     if (!this._trySave(() => this.storage.clearCompletedTasks(this.tasks))) return;
     this._render();
-    this.ui.showToast(`Cleared ${completedCount} completed task${completedCount !== 1 ? 's' : ''}.`);
+    this.lastDeletedIds = completedIds;
+    this.ui.showToast(
+      `Cleared ${completedCount} completed task${completedCount !== 1 ? 's' : ''}.`,
+      6000,
+      { label: 'Undo', onClick: () => this._undoDelete() }
+    );
   }
 
   /* ========================================================

@@ -200,16 +200,34 @@ class TaskUI {
    * @param {string} message
    * @param {number} duration - milliseconds before auto-hide
    */
-  showToast(message, duration = 2400) {
+  showToast(message, duration = 2400, action = null) {
     if (this.toastTimeoutId) {
       clearTimeout(this.toastTimeoutId);
     }
     this.toastEl.textContent = message;
+    // FEAT #9 (C5): an optional button, e.g. { label: 'Undo', onClick }.
+    // Built with createElement/textContent, never innerHTML.
+    this.toastEl.classList.toggle('has-action', Boolean(action));
+    if (action) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'toast__action';
+      button.textContent = action.label;
+      button.addEventListener('click', () => {
+        this.hideToast();
+        action.onClick();
+      });
+      this.toastEl.append(' ', button);
+    }
     this.toastEl.classList.add('is-visible');
 
-    this.toastTimeoutId = setTimeout(() => {
-      this.toastEl.classList.remove('is-visible');
-    }, duration);
+    this.toastTimeoutId = setTimeout(() => this.hideToast(), duration);
+  }
+
+  /** FEAT #9 (C5): hides the toast straight away. */
+  hideToast() {
+    clearTimeout(this.toastTimeoutId);
+    this.toastEl.classList.remove('is-visible', 'has-action');
   }
 
   /**
