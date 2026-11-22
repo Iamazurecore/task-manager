@@ -186,7 +186,14 @@
           <p id="accountEmailShown" class="account__email"></p>
         </div>
       </div>
-      <p class="account__note">Cloud sync is coming in the next update. For now your tasks are still saved on this device.</p>
+      <!-- FEAT #13: sync status, manual sync and the one-time choice for guest tasks -->
+      <p id="accountSyncStatus" class="account__note" role="status">Not synced yet.</p>
+      <button id="accountSyncNow" class="btn btn--subtle" type="button">Sync now</button>
+      <div id="accountMergeChoice" class="account__confirm" hidden>
+        <p id="accountMergeText"></p>
+        <button id="accountMergeCopy" class="btn btn--primary" type="button">Add them to my account</button>
+        <button id="accountMergeKeep" class="btn btn--ghost" type="button">Keep them on this device only</button>
+      </div>
       <button id="accountSignOut" class="btn btn--ghost" type="button">Sign out</button>
       <div class="account__danger">
         <button id="accountDelete" class="btn btn--subtle" type="button">Delete my account and data</button>
@@ -211,6 +218,7 @@
   <script src="js/storage.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/sync.js"></script>
   <script src="js/account.js"></script>
   <script src="js/app.js"></script>
 </body>

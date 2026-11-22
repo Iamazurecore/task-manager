@@ -30,9 +30,16 @@ class TaskApp {
 
     /* ---- FEAT #11: optional accounts (guest mode if unavailable) ---- */
     this.auth = AuthService.fromConfig();
+    // FEAT #13: cloud sync for signed-in users
+    this.sync = new SyncService(this.auth.client, this.storage);
     this.account = new AccountPanel(this.auth, {
       onToggleTheme: () => this._toggleTheme(),
       notify: (message) => this.ui.showToast(message, 4000),
+      sync: this.sync,
+      onTasksReplaced: () => {
+        this.tasks = this.storage.loadTasks();
+        this._render();
+      },
     });
   }
 
@@ -275,6 +282,8 @@ class TaskApp {
   _trySave(change) {
     try {
       this.tasks = change();
+      // FEAT #13: tell the cloud about the change (after a short pause).
+      if (this.account) this.account.scheduleSync();
       return true;
     } catch (error) {
       this.ui.showToast(error.message, 6000);

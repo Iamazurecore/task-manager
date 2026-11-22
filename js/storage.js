@@ -64,10 +64,54 @@ class TaskStorage {
    * @returns {Array<Object>} the same list, only once it is really saved
    */
   _persist(tasks) {
+    // FEAT #13: every task that is new or changed gets an updatedAt time, so
+    // cloud sync can tell which copy of a task is the most recent.
+    const stamped = this._stampChanges(tasks);
+    if (!this.saveTasks(stamped)) {
+      throw new StorageError();
+    }
+    return stamped;
+  }
+
+  /**
+   * FEAT #13: compares the new list with what is saved now. New or edited tasks
+   * get updatedAt = now; unchanged tasks keep their saved updatedAt.
+   * Moving a task up or down the list is not counted as a change.
+   * @param {Array<Object>} tasks
+   * @returns {Array<Object>}
+   */
+  _stampChanges(tasks) {
+    const previous = new Map(this.loadTasks().map((task) => [task.id, task]));
+    const now = new Date().toISOString();
+    const withoutTime = (task) => JSON.stringify({ ...task, updatedAt: undefined });
+    return tasks.map((task) => {
+      const before = previous.get(task.id);
+      if (before && withoutTime(before) === withoutTime(task)) {
+        return before.updatedAt ? { ...task, updatedAt: before.updatedAt } : task;
+      }
+      return { ...task, updatedAt: now };
+    });
+  }
+
+  /**
+   * FEAT #13: saves a list exactly as given (no new timestamps). Used by sync,
+   * where tasks arriving from the cloud must keep their cloud time.
+   * @param {Array<Object>} tasks
+   * @returns {Array<Object>}
+   */
+  replaceAll(tasks) {
     if (!this.saveTasks(tasks)) {
       throw new StorageError();
     }
     return tasks;
+  }
+
+  /**
+   * FEAT #13: empties the trash (used when an account's tasks are removed from
+   * this device on sign-out; the cloud keeps its own record of deletions).
+   */
+  clearTrash() {
+    this._saveTrash([]);
   }
 
   /**
@@ -196,7 +240,7 @@ class TaskStorage {
       restored.splice(Math.min(entry.index, restored.length), 0, entry.task);
     });
 
-    this._persist(restored);
+    const saved = this._persist(restored);
     // The tasks are safely back; if the trash cannot be tidied, they would only
     // remain in it as well, which does no harm, so this failure is not fatal.
     try {
@@ -204,7 +248,7 @@ class TaskStorage {
     } catch (error) {
       console.warn('TaskStorage.restoreTasks: restored, but the trash was not updated', error);
     }
-    return restored;
+    return saved;
   }
 
   /**

@@ -983,6 +983,13 @@ ul {
   }
 }
 
+#accountUser {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
 /* FEAT #9 (C5): a toast with an Undo button must be clickable. */
 .toast.is-visible.has-action {
   pointer-events: auto;
