@@ -26,6 +26,11 @@ class AccountPanel {
     this.message = document.getElementById('accountMessage');
     this.submitBtn = document.getElementById('accountSubmit');
     this.confirmDelete = document.getElementById('accountConfirmDelete');
+    // FEAT #13: cloud sync
+    this.sync = hooks.sync || null;
+    this.syncStatus = document.getElementById('accountSyncStatus');
+    this.mergeChoice = document.getElementById('accountMergeChoice');
+    this.syncTimer = null;
 
     this._bind();
     this._render();
@@ -86,7 +91,65 @@ class AccountPanel {
       this.confirmDelete.hidden = true;
     });
     document.getElementById('accountDeleteConfirm').addEventListener('click', () => this._deleteAccount());
+
+    // FEAT #13: sync controls
+    document.getElementById('accountSyncNow').addEventListener('click', () => this.syncNow());
+    document.getElementById('accountMergeCopy').addEventListener('click', () => this._resolveGuestTasks(true));
+    document.getElementById('accountMergeKeep').addEventListener('click', () => this._resolveGuestTasks(false));
+    window.addEventListener('online', () => this.syncNow());
   }
+
+  /* ---------------- FEAT #13: cloud sync ---------------- */
+
+  /** Called after every local change; waits for a pause, then syncs once. */
+  scheduleSync() {
+    if (!this.user || !this.sync) return;
+    clearTimeout(this.syncTimer);
+    this.syncTimer = setTimeout(() => this.syncNow(), 1500);
+  }
+
+  /** Runs a sync now and shows the result in the panel. */
+  async syncNow() {
+    if (!this.user || !this.sync) return { ok: false };
+    this.syncStatus.textContent = 'Syncing…';
+    const result = await this.sync.syncNow(this.user.id);
+    if (result.waitingForChoice) {
+      this._askAboutGuestTasks();
+      return result;
+    }
+    if (result.ok) {
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      this.syncStatus.textContent = `Synced at ${time}. Your tasks are backed up to your account.`;
+      if (result.changedLocally) this.hooks.onTasksReplaced();
+    } else {
+      this.syncStatus.textContent = navigator.onLine === false
+        ? 'Offline. Your changes are saved on this device and will sync when you are back online.'
+        : `Not synced: ${result.error}`;
+    }
+    return result;
+  }
+
+  _askAboutGuestTasks() {
+    const count = this.sync.pendingGuestTasks(this.user.id);
+    document.getElementById('accountMergeText').textContent =
+      `There ${count === 1 ? 'is 1 task' : `are ${count} tasks`} on this device from before you signed in. Add ${count === 1 ? 'it' : 'them'} to your account?`;
+    this.mergeChoice.hidden = false;
+    this.syncStatus.textContent = 'Waiting for your choice before syncing.';
+    if (!this.isOpen()) this.open();
+  }
+
+  async _resolveGuestTasks(copy) {
+    try {
+      this.sync.resolveGuestTasks(this.user.id, copy);
+    } catch (error) {
+      this._say(error.message, true);
+      return;
+    }
+    this.mergeChoice.hidden = true;
+    if (!copy) this.hooks.onTasksReplaced();
+    await this.syncNow();
+  }
+
 
   _setMode(mode) {
     this.mode = mode;
@@ -95,8 +158,14 @@ class AccountPanel {
   }
 
   _setUser(user) {
+    const before = this.user ? this.user.id : null;
     this.user = user;
     this._render();
+    // FEAT #13: sync once when someone signs in (or the page opens signed in).
+    if (user && user.id !== before && this.sync) {
+      if (this.sync.pendingGuestTasks(user.id) > 0) this._askAboutGuestTasks();
+      else this.syncNow();
+    }
   }
 
   _say(text, isError = false) {
@@ -126,14 +195,27 @@ class AccountPanel {
       this._say('Account created. Check your email and click the link to confirm, then sign in.');
       return;
     }
+    this._say(''); // clear "Signing in…" / "Creating your account…"
     this._setUser(result.user);
-    this.hooks.notify('Signed in.');
+    this.hooks.notify(this.mode === 'signup' ? 'Account created. You are signed in.' : 'Signed in.');
   }
 
   async _signOut() {
+    // FEAT #13: save the latest changes to the cloud first. Only then are the
+    // account's tasks removed from this device, so nothing unsynced is lost.
+    const result = this.sync && this.user ? await this.syncNow() : { ok: false };
     await this.auth.signOut();
-    this._setUser(null);
-    this.hooks.notify('Signed out. Your tasks are still on this device.');
+    this._say('');
+    this.mergeChoice.hidden = true;
+    if (result.ok) {
+      this.sync.clearAccountData();
+      this.hooks.onTasksReplaced();
+      this._setUser(null);
+      this.hooks.notify('Signed out. Your tasks are safe in your account.');
+    } else {
+      this._setUser(null);
+      this.hooks.notify('Signed out. The latest changes could not be synced, so your tasks were kept on this device.');
+    }
   }
 
   async _deleteAccount() {
@@ -142,9 +224,13 @@ class AccountPanel {
       this._say(error, true);
       return;
     }
+    if (this.sync) {
+      this.sync.clearAccountData(); // FEAT #13: the account's copies leave this device too
+      this.hooks.onTasksReplaced();
+    }
     this._setUser(null);
     this.close();
-    this.hooks.notify('Your account and cloud data were deleted. Tasks on this device were kept.');
+    this.hooks.notify('Your account and its tasks were deleted. Any guest tasks on this device were kept.');
   }
 
   _render() {
