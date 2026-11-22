@@ -10,6 +10,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['js/**/*.js'],
+      // FEAT #11: third-party code we did not write is not counted.
+      exclude: ['js/vendor/**'],
       reporter: ['text', 'html', 'json-summary'],
     },
   },

@@ -27,6 +27,13 @@ class TaskApp {
     this._bindEvents();
     this._applyTheme();
     this._render();
+
+    /* ---- FEAT #11: optional accounts (guest mode if unavailable) ---- */
+    this.auth = AuthService.fromConfig();
+    this.account = new AccountPanel(this.auth, {
+      onToggleTheme: () => this._toggleTheme(),
+      notify: (message) => this.ui.showToast(message, 4000),
+    });
   }
 
   /* ========================================================
