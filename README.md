@@ -35,6 +35,7 @@ No build step, no `npm install`, no server required.
 
 ### Drag & drop
 - Reorder tasks by dragging them up or down the list
+- Reordering with a filter or search keeps hidden tasks in their existing positions
 - Order persists across page reloads via `localStorage`
 
 ### Dark / Light mode

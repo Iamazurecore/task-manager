@@ -135,6 +135,20 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+/**
+ * Reorders visible task IDs while keeping filtered-out tasks in their slots.
+ * @param {Array<string>} allIds - IDs in the full task list
+ * @param {Array<string>} orderedVisibleIds - visible IDs in their new order
+ * @returns {Array<string>}
+ */
+function reorderVisibleIds(allIds, orderedVisibleIds) {
+  const visibleIds = new Set(orderedVisibleIds);
+  let visibleIndex = 0;
+  return allIds.map((id) =>
+    visibleIds.has(id) ? orderedVisibleIds[visibleIndex++] : id
+  );
+}
+
 /* Lets the automated tests load this file in Node. Browsers skip this block. */
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -148,5 +162,6 @@ if (typeof module !== 'undefined' && module.exports) {
     debounce,
     capitalize,
     clamp,
+    reorderVisibleIds,
   };
 }

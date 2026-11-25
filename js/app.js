@@ -544,13 +544,11 @@ class TaskApp {
       visibleIds.splice(srcIndex, 1);
       visibleIds.splice(tgtIndex, 0, this.dragSrcId);
 
-      // Build a full ordered ID list: visible tasks in new order,
-      // then any hidden (filtered-out) tasks appended in their original order
-      const visibleSet = new Set(visibleIds);
-      const hiddenIds = this.tasks
-        .map((t) => t.id)
-        .filter((id) => !visibleSet.has(id));
-      const orderedIds = [...visibleIds, ...hiddenIds];
+      // Reorder only the visible slots; filtered-out tasks stay in place.
+      const orderedIds = reorderVisibleIds(
+        this.tasks.map((task) => task.id),
+        visibleIds
+      );
 
       // FIX #3 (A1): if the save failed, redraw the list in its old order.
       const saved = this._trySave(() => this.storage.reorderTasks(this.tasks, orderedIds));

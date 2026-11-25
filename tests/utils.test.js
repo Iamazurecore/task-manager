@@ -13,6 +13,7 @@ const {
   debounce,
   capitalize,
   clamp,
+  reorderVisibleIds,
 } = utils;
 
 describe('generateId', () => {
@@ -109,5 +110,23 @@ describe('capitalize and clamp', () => {
     expect(clamp(5, 0, 10)).toBe(5);
     expect(clamp(-3, 0, 10)).toBe(0);
     expect(clamp(99, 0, 10)).toBe(10);
+  });
+});
+
+describe('reorderVisibleIds', () => {
+  it('reorders visible tasks without moving filtered-out tasks from their slots', () => {
+    expect(
+      reorderVisibleIds(['hidden-a', 'visible-a', 'hidden-b', 'visible-b', 'hidden-c'], [
+        'visible-b',
+        'visible-a',
+      ])
+    ).toEqual(['hidden-a', 'visible-b', 'hidden-b', 'visible-a', 'hidden-c']);
+  });
+
+  it('preserves the full order when visible tasks are not reordered', () => {
+    expect(reorderVisibleIds(['hidden', 'visible-a', 'visible-b'], [
+      'visible-a',
+      'visible-b',
+    ])).toEqual(['hidden', 'visible-a', 'visible-b']);
   });
 });
